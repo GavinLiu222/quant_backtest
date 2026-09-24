@@ -403,39 +403,3 @@ Returns, volatilities and drawdowns are in **%**.
 
 When selecting the top N, factor values get a random perturbation of order 1e-12 to break ties (original framework behavior), so
 with many tied factor values, repeated runs can differ very slightly.
-
-## Changes from the original framework
-
-The logic of the calculation functions is unchanged; only inputs and outputs were modified:
-
-| Original framework | Now |
-|---|---|
-| Data paths came from `USER_DATA_DIR/projects/<dir name>` (split on the Windows `\`, which fails on macOS/Linux) or the hard-coded `/Volumes/GAVIN/...` | One `settings.DATA_DIR` (override with the `BACKTEST_DATA_DIR` environment variable) |
-| Dates, universes, benchmarks, holding counts and the neutralization switch were hard-coded in each script's `__main__` | Centralized in `settings.py` |
-| File names `CommonFunctions.py` and `IC_tests.py` mixed case styles | Renamed to `common_functions.py` and `ic_tests.py`: all lowercase |
-| Script names `position2nav_testing.py`, `positions2nav_update.py`, `nav2stats.py` and `positions2nav.py` did not say what the scripts do, and mixed singular/plural | Renamed after what they do, in the same order: `group_backtest.py` (③), `top_n_portfolio.py` (⑤), `portfolio_stats.py` (⑥) and `single_factor_group_backtest.py` (single-factor 5-group test) |
-| `tradying_days.pq` under `common/` or `market_data/` | `market_data/trading_days.pq` |
-| `datelist.pq` under `config/` or `market_data/` | `config/rebalance_dates.pq` |
-| `stock_prices.pq` + `stock_market.pq` + `ashare_deri.pq` with Wind column names | Merged into `stock_market.pq`; free-float market value is the `float_mv` column |
-| Factor files had inconsistent columns (5 in ③, renamed by position elsewhere) | Read by name everywhere: `date, stock_id, factor_value` |
-| `positions2nav.py` read yearly wide files `factors_<year>0101.pq` | Reads one standard factor file: `python single_factor_group_backtest.py <factor>` |
-| ③ needed `portfolio_info_onetime.xlsx`; every engine also read the unused `factor_info` sheet and `index_info.xlsx` | Group portfolios are generated from `N_GROUPS`; `index_info.xlsx` is read only in database mode |
-| The STAR Market (`kc`) universe was derived from codes starting with `688` | Provided as a `kc` column in `stock_status.pq`, like any other universe |
-| Industry columns were fixed to 31 CITIC industries with a `zx_` prefix | Any column starting with `INDUSTRY_PREFIX` |
-| Code filters (`.BJ` / `.NE` / `.WI` / starts with `A` / `000024.SZ`) were scattered and differed between scripts | `settings.EXCLUDE_*`, applied where the original scripts filtered |
-| A STAR-Market-specific patch for `2021-12-30` | Removed: it only applied to the original data, and under pandas 2.x it turned the date column into object dtype and broke the merge |
-| ⑤ connected to the database even offline; its STAR Market part pulled prices from the database | Connects only when `old_navs='database'`; everything reads local files by default |
-| Factor read failures were skipped silently; output directories had to exist | The skip reason is printed; output directories are created; data is checked before running |
-| `pyarrow` / `openpyxl` were not declared; `pandas>=3` | Dependencies added; pandas pinned `<3` (the original `groupby().apply()` calls rely on the grouping column staying in the result, which pandas 3 removed, so `date` would be lost) |
-
-**Equivalence check**: on the demo data, the original scripts (with only paths, dates and offline switches patched) and
-this framework were run through every step. All 103 output files / sheets (neutralized factors, IC, group holdings and NAVs,
-factor directions, long-short statistics, top-N holdings and NAVs, performance statistics, and the single-factor 5-group test)
-match within 1e-12.
-
-## Show your support
-
-Give a ⭐️ if this project helped you!
-
-***
-_This README was generated with ❤️ by [readme-md-generator](https://github.com/kefranabg/readme-md-generator)_
