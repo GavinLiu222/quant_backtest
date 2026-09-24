@@ -608,10 +608,10 @@ if __name__=='__main__':
 
     def main_process(benchmark, nav_folder, portfolio_folder, barra, neu):
 
-        # 'benchmark' is the universe name (portfolio_info.stock_area); navs come from positions2nav_update.py
+        # 'benchmark' is the universe name (portfolio_info.stock_area); navs come from top_n_portfolio.py
         nav_path = DATA_DIR + '/navs' + nav_folder + f'/navs_{benchmark}.pq'
         if not os.path.exists(nav_path):
-            print(f'{benchmark}: {nav_path} not found, run positions2nav_update.py first; skipped')
+            print(f'{benchmark}: {nav_path} not found, run top_n_portfolio.py first; skipped')
             return
 
         obj_positions2nav = Positions2Nav()

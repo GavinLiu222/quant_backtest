@@ -837,10 +837,10 @@ class Positions2Nav(object):
 if __name__=='__main__':
     # initialize Positions2Nav
 
-    # 5-group test of a single factor: python positions2nav.py <factor_name>
+    # 5-group test of a single factor: python single_factor_group_backtest.py <factor_name>
     # (the factor file is factor_data/factors[_neutral]/<factor_name>.pq, see data_spec.py)
     if len(sys.argv) < 2:
-        sys.exit('usage: python positions2nav.py <factor_name>')
+        sys.exit('usage: python single_factor_group_backtest.py <factor_name>')
     factor_name = sys.argv[1]
 
     datadir = DATA_DIR

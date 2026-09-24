@@ -34,7 +34,7 @@ NEUTRAL = False
 # ---------------------------------------------------------------------------
 # 键 = 股票池名称，必须与 market_data/stock_status.pq 中对应的 0/1 标记列同名。
 #   benchmark         : 基准指数代码，必须是 market_data/index_prices.pq 的一列
-#   top_n             : positions2nav_update.py 构建因子多头组合时的持股数
+#   top_n             : top_n_portfolio.py 构建因子多头组合时的持股数
 #   weighting         : 'equal'    等权
 #                       'float_mv' 按流通市值加权，单票权重上限 WEIGHT_CAP（需要 stock_market.pq 含 float_mv 列）
 #   exclude_new_stock : 是否剔除次新股 (stock_status.pq 中 is_new_stock == 1)
@@ -72,7 +72,7 @@ EXCLUDE_ID_PREFIXES = ('A',)
 EXCLUDE_IDS = ('000024.SZ',)
 
 # ---------------------------------------------------------------------------
-# nav2stats.py
+# portfolio_stats.py
 # ---------------------------------------------------------------------------
 # True 时用 portfolio_info 中 sheet '软约束限BARRA_{barra_sheet}_01' 的
 # (original_portfolio -> portfolio_name) 映射重命名输出中的组合名。
