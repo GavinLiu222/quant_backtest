@@ -24,7 +24,7 @@ market_data/barra_factors.pq    date, stock_id, size             （仅中性化
 market_data/index_prices.pq     宽表：索引为日期 (DatetimeIndex)，每列一个指数代码，值为收盘价
 factor_data/factors/<factor_name>.pq   date, stock_id, factor_value
 
-各字段的含义见 README.md「数据规则」一节。
+各字段的含义见 README.zh-CN.md「数据规则」一节。
 """
 import os
 import sys

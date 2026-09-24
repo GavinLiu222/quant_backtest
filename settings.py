@@ -2,7 +2,7 @@
 """
 回测框架的全部可调参数。修改这里即可，不需要改动各脚本。
 
-数据文件的目录与格式规则见 data_spec.py 和 README.md。
+数据文件的目录与格式规则见 data_spec.py 和 README.zh-CN.md。
 """
 import os
 
