@@ -395,38 +395,3 @@ SQL 针对原公司的 Wind 库表结构编写，默认全部关闭，离线运�
 4. 净值 = （持仓市值 + 现金）/ `INIT_AMOUNT`；`turn_over` = 当日（买入 + 卖出）金额 / 组合市值。
 
 Top N 选股时会给因子值加上 1e-12 量级的随机扰动以打破并列（原框架逻辑），因此因子值存在大量并列时，多次运行结果可能有极小差异。
-
-## 与原框架相比的改动
-
-计算函数的逻辑没有修改。改动只涉及输入输出：
-
-| 原框架 | 现在 |
-|---|---|
-| 数据路径来自 `USER_DATA_DIR/projects/<目录名>`（用 Windows 的 `\` 拆分路径，macOS/Linux 上直接报错）或写死的 `/Volumes/GAVIN/...` | 统一为 `settings.DATA_DIR`（可用环境变量 `BACKTEST_DATA_DIR` 覆盖） |
-| 各脚本 `__main__` 中分散写死日期、股票池、基准、持股数、中性化开关 | 集中到 `settings.py` |
-| 文件名 `CommonFunctions.py`、`IC_tests.py` 大小写不统一 | 改为 `common_functions.py`、`ic_tests.py`：全部小写 |
-| 脚本名 `position2nav_testing.py`、`positions2nav_update.py`、`nav2stats.py`、`positions2nav.py` 看不出具体功能，单复数也不统一 | 按功能依次重命名为 `group_backtest.py`（③）、`top_n_portfolio.py`（⑤）、`portfolio_stats.py`（⑥）、`single_factor_group_backtest.py`（单因子 5 分组测试） |
-| `common/` 或 `market_data/` 下的 `tradying_days.pq` | `market_data/trading_days.pq` |
-| `config/` 或 `market_data/` 下的 `datelist.pq` | `config/rebalance_dates.pq` |
-| `stock_prices.pq` + `stock_market.pq` + Wind 字段的 `ashare_deri.pq` | 合并为 `stock_market.pq`，流通市值为 `float_mv` 列 |
-| 因子文件列格式不统一（③ 为 5 列，其余按位置改名） | 统一按列名读取 `date, stock_id, factor_value` |
-| `positions2nav.py` 读取逐年宽表 `factors_<年>0101.pq` | 读取一个标准因子文件：`python single_factor_group_backtest.py <因子名>` |
-| ③ 需要 `portfolio_info_onetime.xlsx`；各引擎还读取未使用的 `factor_info` sheet 和 `index_info.xlsx` | 分组组合由 `N_GROUPS` 自动生成；`index_info.xlsx` 只在数据库模式下读取 |
-| 科创板股票池由代码 `688` 开头自动生成 | 在 `stock_status.pq` 中与其他股票池一样提供 `kc` 列 |
-| 行业列固定为 31 个 `zx_` 前缀的中信行业 | 所有以 `INDUSTRY_PREFIX` 开头的列 |
-| 代码过滤（`.BJ` / `.NE` / `.WI` / `A` 开头 / `000024.SZ`）分散在各脚本且各不相同 | `settings.EXCLUDE_*`，在原来做过滤的位置统一使用 |
-| 科创板专用的 `2021-12-30` 日期修补 | 删除：它只针对原数据，且在 pandas 2.x 下会把日期列变成 object 类型导致合并报错 |
-| ⑤ 离线运行时也强制连接数据库；科创板部分从数据库拉行情 | 只在 `old_navs='database'` 时连接；全部默认读取本地文件 |
-| 读因子失败时静默跳过；输出目录需手工创建 | 打印跳过原因；输出目录自动创建；运行前检查数据 |
-| 未声明 `pyarrow` / `openpyxl`，`pandas>=3` | 补充依赖；pandas 限定 `<3`（原代码的 `groupby().apply()` 依赖分组列保留在结果中，pandas 3 已移除该行为，结果会丢失 `date` 列） |
-
-**一致性验证**：在模拟数据上，用原版脚本（只修改路径、日期和离线开关）与本框架分别运行全部步骤，
-中性化因子、IC、分组持仓与净值、因子方向、多空统计、Top N 持仓与净值、绩效统计以及单因子 5 分组测试的
-共 103 个输出文件 / sheet 在 1e-12 精度内完全一致。
-
-## 支持
-
-如果这个项目对你有帮助，欢迎点一个 ⭐️！
-
-***
-_本 README 基于 [readme-md-generator](https://github.com/kefranabg/readme-md-generator) 生成_
