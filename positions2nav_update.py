@@ -15,7 +15,7 @@ plt.rcParams['axes.titleweight'] = 3
 import os, sys, inspect
 import logging
 
-from CommonFunctions import conn2db
+from common_functions import conn2db
 from settings import START_DATE, END_DATE, SPECIAL_DATE, UNIVERSES, INIT_AMOUNT, FEE_RATE, WEIGHT_CAP
 from data_spec import (NEU, DATA_DIR, LOG_DIR, STOCK_MARKET, STOCK_STATUS, REBALANCE_DATES, factors_dict_path,
                        portfolio_info_path, factor_path, ensure_parent, drop_excluded_stocks)

@@ -14,8 +14,8 @@ from data_spec import DATA_DIR, STAGES, validate
 
 SCRIPTS = {
     'neutralize': 'factor_neutralize.py',
-    'ic':         'IC_tests.py',
-    'testing':    'position2nav_testing.py',
+    'ic':         'ic_tests.py',
+    'testing':    'positions2nav_testing.py',
     'long_short': 'long_short.py',
     'update':     'positions2nav_update.py',
     'stats':      'nav2stats.py',

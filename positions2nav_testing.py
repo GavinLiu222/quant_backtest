@@ -13,7 +13,7 @@ plt.rcParams['figure.figsize'] = (30,16)
 plt.rcParams['axes.titlesize'] = 36
 plt.rcParams['axes.titleweight'] = 3
 
-# from CommonFunctions import conn2db
+# from common_functions import conn2db
 # wind_conn = conn2db('wind_conn')
 # factors_conn = conn2db('factors_conn')
 # market_conn = conn2db('market_conn')
@@ -26,7 +26,7 @@ import os, sys, inspect
 # cvxopt was imported here but never used in this module; it is left out so the
 # framework runs without a solver stack. Re-add it if an optimiser is added.
 
-from CommonFunctions import conn2db
+from common_functions import conn2db
 from settings import (START_DATE, END_DATE, SPECIAL_DATE, UNIVERSES, N_GROUPS, INIT_AMOUNT, FEE_RATE, WEIGHT_CAP,
                       DAYS_PER_YEAR)
 from data_spec import (NEU, DATA_DIR, STOCK_MARKET, STOCK_STATUS, REBALANCE_DATES, factors_dict_path, factor_path,

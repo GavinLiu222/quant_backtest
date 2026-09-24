@@ -28,7 +28,7 @@ import logging
 # cvxopt was imported here but never used in this module; it is left out so the
 # framework runs without a solver stack. Re-add it if an optimiser is added.
 
-from CommonFunctions import conn2db
+from common_functions import conn2db
 from settings import INDUSTRY_PREFIX
 from data_spec import (STOCK_STATUS, BARRA_FACTORS, factors_dict_path, factor_path, ensure_parent,
                        drop_excluded_stocks)

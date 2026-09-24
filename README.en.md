@@ -14,11 +14,11 @@ It covers the full path of a factor from research to portfolio evaluation:
  raw factors ─(opt)─▶ │ ① factor_neutralize.py  │ winsorize → standardize → fill with industry median → industry + size neutralization
                      └───────────┬─────────────┘
                                  ▼
-          ② IC_tests.py              Rank IC / ICIR
-          ③ position2nav_testing.py  N-group backtest, detects the factor direction
-          ④ long_short.py            long-short portfolio from the top and bottom groups
-          ⑤ positions2nav_update.py  long-only top-N portfolio per factor direction (incremental updates)
-          ⑥ nav2stats.py             portfolio performance relative to a benchmark index
+          ② ic_tests.py               Rank IC / ICIR
+          ③ positions2nav_testing.py  N-group backtest, detects the factor direction
+          ④ long_short.py             long-short portfolio from the top and bottom groups
+          ⑤ positions2nav_update.py   long-only top-N portfolio per factor direction (incremental updates)
+          ⑥ nav2stats.py              portfolio performance relative to a benchmark index
 ```
 
 Every script reads and writes local parquet / Excel files only; **no database is needed**. Prepare your data according to the
@@ -78,7 +78,7 @@ data specification exactly, runs through the whole pipeline (about 1–2 minutes
 uv run python main.py testing long_short
 ```
 
-Step names are `neutralize ic testing long_short update stats`. You can also run a script directly (e.g. `uv run python IC_tests.py`),
+Step names are `neutralize ic testing long_short update stats`. You can also run a script directly (e.g. `uv run python ic_tests.py`),
 but then the data check is skipped.
 
 The single-factor 5-group test is not part of the `main.py` pipeline and is run on its own:
@@ -98,13 +98,13 @@ uv run python positions2nav.py alpha_signal
 | [`main.py`](main.py) | One-command run: checks the data, then runs ①–⑥ in order |
 | [`make_demo_data.py`](make_demo_data.py) | Generates demo data that follows the specification |
 | [`factor_neutralize.py`](factor_neutralize.py) | ① Factor neutralization |
-| [`IC_tests.py`](IC_tests.py) | ② Rank IC / ICIR |
-| [`position2nav_testing.py`](position2nav_testing.py) | ③ Group backtest + factor direction |
+| [`ic_tests.py`](ic_tests.py) | ② Rank IC / ICIR |
+| [`positions2nav_testing.py`](positions2nav_testing.py) | ③ Group backtest + factor direction |
 | [`long_short.py`](long_short.py) | ④ Long-short statistics |
 | [`positions2nav_update.py`](positions2nav_update.py) | ⑤ Top-N long-only factor portfolios |
 | [`nav2stats.py`](nav2stats.py) | ⑥ Portfolio performance statistics (vs benchmark) |
 | [`positions2nav.py`](positions2nav.py) | Backtest engine prototype + single-factor 5-group test |
-| [`CommonFunctions.py`](CommonFunctions.py) | Database connection and other helpers (not needed offline) |
+| [`common_functions.py`](common_functions.py) | Database connection and other helpers (not needed offline) |
 
 ③, ⑤, ⑥ and `positions2nav.py` each contain a copy of the `Positions2Nav` class, the "positions → NAV" backtest engine; see
 [How the backtest engine computes NAV](#how-the-backtest-engine-computes-nav).
@@ -256,7 +256,7 @@ With `NEUTRAL=True` the file `portfolio_info_neutral.xlsx` is read instead.
 ### Optional: database mode
 
 The original framework's database fetching is kept intact (enabled when `stock_prices` / `index_prices` > 0 in a script's
-`isupdate_data`). It needs the `QUANT_DB_*` environment variables (see [`CommonFunctions.py`](CommonFunctions.py)) and
+`isupdate_data`). It needs the `QUANT_DB_*` environment variables (see [`common_functions.py`](common_functions.py)) and
 `config/index_info.xlsx`. The SQL targets the original company's Wind database schema; it is off by default and not needed offline.
 
 ## Settings
@@ -297,7 +297,7 @@ loops over all universes in `UNIVERSES`.
 | Where | Constant |
 |---|---|
 | Engine `calculate_position_core` / `config` | 95% invested at the first build and at every rebalance, 5% kept in cash |
-| `IC_tests.py` | Forward-return window: close `t+1` to close `t+21` (`ret_20D`); `Rank_ICIR = mean(IC) / (std(IC)·√252)` |
+| `ic_tests.py` | Forward-return window: close `t+1` to close `t+21` (`ret_20D`); `Rank_ICIR = mean(IC) / (std(IC)·√252)` |
 | `factor_neutralize.py` | MAD winsorization at 3×1.4826×MAD; skipped when a cross-section has fewer than 100 unique values |
 | each `statistics_core_1` | Recent 6-month / 3-month / 1-month / 1-week / 3-day / 2-day / 1-day returns start from the 121st / 64th / 22nd / 6th / 4th / 3rd / 2nd NAV from the end (1 year: the `DAYS_PER_YEAR`-th) |
 | `positions2nav.py` | The single-factor test always uses 5 groups |
@@ -313,7 +313,7 @@ directories are created automatically.
 - **Processing** (per trading-day cross-section): MAD winsorization → z-score → fill missing values with the industry median → OLS on industry dummies + size, keep the residual
 - **Output**: `factor_data/factors_neutral/{f}.pq` (`date, stock_id, factor_value`)
 
-### ② `IC_tests.py`: Rank IC
+### ② `ic_tests.py`: Rank IC
 
 - **Inputs**: `factors_dict{neu}.xlsx`, `factors{neu}/{f}.pq`, `stock_market.pq` (`adj_close`), `stock_status.pq` (universe columns)
 - **Output**: `results/icir{neu}/icir_stats_{u}.xlsx`
@@ -321,7 +321,7 @@ directories are created automatically.
   - `累计Rank_IC` (cumulative Rank IC): running sum of the daily IC
   - `Rank_ICIR`: `mean / (std·√252)`
 
-### ③ `position2nav_testing.py`: group backtest
+### ③ `positions2nav_testing.py`: group backtest
 
 - **Inputs**: `factors_dict{neu}.xlsx`, `factors{neu}/{f}.pq`, `stock_market.pq`, `stock_status.pq`, `rebalance_dates.pq`, `trading_days.pq`, `index_prices.pq`
 - **Sample**: on the signal date the stock is in the universe, `trade_status == 1`, `is_ST == 0`, not limit-locked, (optionally) not newly listed, and has a factor value
@@ -412,6 +412,7 @@ The logic of the calculation functions is unchanged; only inputs and outputs wer
 |---|---|
 | Data paths came from `USER_DATA_DIR/projects/<dir name>` (split on the Windows `\`, which fails on macOS/Linux) or the hard-coded `/Volumes/GAVIN/...` | One `settings.DATA_DIR` (override with the `BACKTEST_DATA_DIR` environment variable) |
 | Dates, universes, benchmarks, holding counts and the neutralization switch were hard-coded in each script's `__main__` | Centralized in `settings.py` |
+| File names `CommonFunctions.py`, `IC_tests.py` and `position2nav_testing.py` mixed case styles and singular/plural | Renamed to `common_functions.py`, `ic_tests.py` and `positions2nav_testing.py`: all lowercase, `positions` throughout |
 | `tradying_days.pq` under `common/` or `market_data/` | `market_data/trading_days.pq` |
 | `datelist.pq` under `config/` or `market_data/` | `config/rebalance_dates.pq` |
 | `stock_prices.pq` + `stock_market.pq` + `ashare_deri.pq` with Wind column names | Merged into `stock_market.pq`; free-float market value is the `float_mv` column |
@@ -426,7 +427,7 @@ The logic of the calculation functions is unchanged; only inputs and outputs wer
 | Factor read failures were skipped silently; output directories had to exist | The skip reason is printed; output directories are created; data is checked before running |
 | `pyarrow` / `openpyxl` were not declared; `pandas>=3` | Dependencies added; pandas pinned `<3` (the original `groupby().apply()` calls rely on the grouping column staying in the result, which pandas 3 removed, so `date` would be lost) |
 
-**Equivalence check**: on the demo data, the original scripts from git (with only paths, dates and offline switches patched) and
+**Equivalence check**: on the demo data, the original scripts (with only paths, dates and offline switches patched) and
 this framework were run through every step. All 103 output files / sheets (neutralized factors, IC, group holdings and NAVs,
 factor directions, long-short statistics, top-N holdings and NAVs, performance statistics, and `positions2nav.py`) match within 1e-12.
 

@@ -14,11 +14,11 @@
  原始因子 ──(可选)──▶ │ ① factor_neutralize.py  │ 去极值 → 标准化 → 行业中位数填充 → 行业+市值中性化
                      └───────────┬─────────────┘
                                  ▼
-          ② IC_tests.py              Rank IC / ICIR
-          ③ position2nav_testing.py  N 分组回测，自动判定因子方向
-          ④ long_short.py            头尾两组构建多空组合并统计
-          ⑤ positions2nav_update.py  按因子方向选 Top N 构建多头组合（支持增量更新）
-          ⑥ nav2stats.py             组合相对基准指数的绩效统计
+          ② ic_tests.py               Rank IC / ICIR
+          ③ positions2nav_testing.py  N 分组回测，自动判定因子方向
+          ④ long_short.py             头尾两组构建多空组合并统计
+          ⑤ positions2nav_update.py   按因子方向选 Top N 构建多头组合（支持增量更新）
+          ⑥ nav2stats.py              组合相对基准指数的绩效统计
 ```
 
 所有脚本只读写本地 parquet / Excel 文件，**不依赖任何数据库**。按照[数据规则](#数据规则)准备数据，
@@ -77,7 +77,7 @@ uv run python main.py
 uv run python main.py testing long_short
 ```
 
-步骤名为 `neutralize ic testing long_short update stats`。也可以直接运行脚本（如 `uv run python IC_tests.py`），但这样不会先做数据检查。
+步骤名为 `neutralize ic testing long_short update stats`。也可以直接运行脚本（如 `uv run python ic_tests.py`），但这样不会先做数据检查。
 
 单因子 5 分组测试不在 `main.py` 流程中，需要单独运行：
 
@@ -96,13 +96,13 @@ uv run python positions2nav.py alpha_signal
 | [`main.py`](main.py) | 一键运行：先检查数据，再依次运行 ①–⑥ |
 | [`make_demo_data.py`](make_demo_data.py) | 生成符合规则的模拟数据 |
 | [`factor_neutralize.py`](factor_neutralize.py) | ① 因子中性化 |
-| [`IC_tests.py`](IC_tests.py) | ② Rank IC / ICIR |
-| [`position2nav_testing.py`](position2nav_testing.py) | ③ 分组回测 + 因子方向判定 |
+| [`ic_tests.py`](ic_tests.py) | ② Rank IC / ICIR |
+| [`positions2nav_testing.py`](positions2nav_testing.py) | ③ 分组回测 + 因子方向判定 |
 | [`long_short.py`](long_short.py) | ④ 多空组合统计 |
 | [`positions2nav_update.py`](positions2nav_update.py) | ⑤ Top N 因子多头组合 |
 | [`nav2stats.py`](nav2stats.py) | ⑥ 组合绩效统计（相对基准） |
 | [`positions2nav.py`](positions2nav.py) | 回测引擎原型 + 单因子 5 分组测试 |
-| [`CommonFunctions.py`](CommonFunctions.py) | 数据库连接等公共函数（离线运行用不到） |
+| [`common_functions.py`](common_functions.py) | 数据库连接等公共函数（离线运行用不到） |
 
 ③⑤⑥ 和 `positions2nav.py` 中各有一份 `Positions2Nav` 类，即"持仓 → 净值"的回测引擎，逻辑见[回测引擎的计算口径](#回测引擎的计算口径)。
 
@@ -251,7 +251,7 @@ sheet 名必须为 `portfolio_info`，每行一个组合：
 ### 可选：数据库模式
 
 原框架的数据库拉数功能完整保留（各脚本 `isupdate_data` 中 `stock_prices` / `index_prices` > 0 时启用），
-需要设置 `QUANT_DB_*` 环境变量（见 [`CommonFunctions.py`](CommonFunctions.py)）以及 `config/index_info.xlsx`。
+需要设置 `QUANT_DB_*` 环境变量（见 [`common_functions.py`](common_functions.py)）以及 `config/index_info.xlsx`。
 SQL 针对原公司的 Wind 库表结构编写，默认全部关闭，离线运行不需要。
 
 ## 参数设置
@@ -291,7 +291,7 @@ SQL 针对原公司的 Wind 库表结构编写，默认全部关闭，离线运�
 | 位置 | 常数 |
 |---|---|
 | 回测引擎 `calculate_position_core` / `config` | 建仓与每次调仓时投资 95%，保留 5% 现金 |
-| `IC_tests.py` | 未来收益窗口：`t+1` 到 `t+21` 收盘（`ret_20D`）；`Rank_ICIR = mean(IC) / (std(IC)·√252)` |
+| `ic_tests.py` | 未来收益窗口：`t+1` 到 `t+21` 收盘（`ret_20D`）；`Rank_ICIR = mean(IC) / (std(IC)·√252)` |
 | `factor_neutralize.py` | MAD 去极值阈值 3×1.4826×MAD，截面唯一值少于 100 时跳过去极值 |
 | 各 `statistics_core_1` | 近 6 月 / 3 月 / 1 月 / 1 周 / 3 日 / 2 日 / 1 日收益分别以倒数第 121 / 64 / 22 / 6 / 4 / 3 / 2 个净值为起点（近 1 年为倒数第 `DAYS_PER_YEAR` 个） |
 | `positions2nav.py` | 单因子测试固定为 5 组 |
@@ -306,7 +306,7 @@ SQL 针对原公司的 Wind 库表结构编写，默认全部关闭，离线运�
 - **处理**（每个交易日截面）：MAD 去极值 → z-score → 行业中位数填充缺失 → 对「行业哑变量 + size」做 OLS，取残差
 - **输出**：`factor_data/factors_neutral/{f}.pq`（`date, stock_id, factor_value`）
 
-### ② `IC_tests.py`：Rank IC
+### ② `ic_tests.py`：Rank IC
 
 - **输入**：`factors_dict{neu}.xlsx`、`factors{neu}/{f}.pq`、`stock_market.pq`（`adj_close`）、`stock_status.pq`（股票池列）
 - **输出**：`results/icir{neu}/icir_stats_{u}.xlsx`
@@ -314,7 +314,7 @@ SQL 针对原公司的 Wind 库表结构编写，默认全部关闭，离线运�
   - `累计Rank_IC`：日度 IC 的累加
   - `Rank_ICIR`：`mean / (std·√252)`
 
-### ③ `position2nav_testing.py`：分组回测
+### ③ `positions2nav_testing.py`：分组回测
 
 - **输入**：`factors_dict{neu}.xlsx`、`factors{neu}/{f}.pq`、`stock_market.pq`、`stock_status.pq`、`rebalance_dates.pq`、`trading_days.pq`、`index_prices.pq`
 - **样本**：信号日属于该股票池、`trade_status == 1`、`is_ST == 0`、非一字板、（可选）非次新股、因子值非空
@@ -404,6 +404,7 @@ Top N 选股时会给因子值加上 1e-12 量级的随机扰动以打破并列�
 |---|---|
 | 数据路径来自 `USER_DATA_DIR/projects/<目录名>`（用 Windows 的 `\` 拆分路径，macOS/Linux 上直接报错）或写死的 `/Volumes/GAVIN/...` | 统一为 `settings.DATA_DIR`（可用环境变量 `BACKTEST_DATA_DIR` 覆盖） |
 | 各脚本 `__main__` 中分散写死日期、股票池、基准、持股数、中性化开关 | 集中到 `settings.py` |
+| 文件名 `CommonFunctions.py`、`IC_tests.py`、`position2nav_testing.py` 大小写、单复数不统一 | 改为 `common_functions.py`、`ic_tests.py`、`positions2nav_testing.py`：全部小写，统一用 `positions` |
 | `common/` 或 `market_data/` 下的 `tradying_days.pq` | `market_data/trading_days.pq` |
 | `config/` 或 `market_data/` 下的 `datelist.pq` | `config/rebalance_dates.pq` |
 | `stock_prices.pq` + `stock_market.pq` + Wind 字段的 `ashare_deri.pq` | 合并为 `stock_market.pq`，流通市值为 `float_mv` 列 |
@@ -418,7 +419,7 @@ Top N 选股时会给因子值加上 1e-12 量级的随机扰动以打破并列�
 | 读因子失败时静默跳过；输出目录需手工创建 | 打印跳过原因；输出目录自动创建；运行前检查数据 |
 | 未声明 `pyarrow` / `openpyxl`，`pandas>=3` | 补充依赖；pandas 限定 `<3`（原代码的 `groupby().apply()` 依赖分组列保留在结果中，pandas 3 已移除该行为，结果会丢失 `date` 列） |
 
-**一致性验证**：在模拟数据上，用 git 中原版脚本（只修改路径、日期和离线开关）与本框架分别运行全部步骤，
+**一致性验证**：在模拟数据上，用原版脚本（只修改路径、日期和离线开关）与本框架分别运行全部步骤，
 中性化因子、IC、分组持仓与净值、因子方向、多空统计、Top N 持仓与净值、绩效统计以及 `positions2nav.py` 的
 共 103 个输出文件 / sheet 在 1e-12 精度内完全一致。
 

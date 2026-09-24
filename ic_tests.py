@@ -18,7 +18,7 @@ from scipy.stats import spearmanr
 import os, sys, inspect
 import logging
 
-from CommonFunctions import conn2db
+from common_functions import conn2db
 from settings import START_DATE, END_DATE, UNIVERSES
 from data_spec import NEU, DATA_DIR, STOCK_MARKET, STOCK_STATUS, factors_dict_path, factor_path, ensure_parent
 

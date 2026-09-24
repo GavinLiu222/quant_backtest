@@ -12,7 +12,7 @@ plt.rcParams['figure.figsize'] = (30,16)
 plt.rcParams['axes.titlesize'] = 36
 plt.rcParams['axes.titleweight'] = 3
 
-from CommonFunctions import conn2db
+from common_functions import conn2db
 # Connections are created lazily inside the methods that need them (and only
 # when isupdate>0). Export the QUANT_DB_* env vars to enable online fetching.
 # wind_conn = conn2db('wind_conn')
@@ -27,7 +27,7 @@ import logging
 # cvxopt was imported here but never used in this module; it is left out so the
 # framework runs without a solver stack. Re-add it if an optimiser is added.
 
-from CommonFunctions import conn2db
+from common_functions import conn2db
 from settings import START_DATE, END_DATE, SPECIAL_DATE, UNIVERSES, INIT_AMOUNT, FEE_RATE
 from data_spec import (DATA_DIR, LOG_DIR, STOCK_MARKET, STOCK_STATUS, REBALANCE_DATES, factor_path, ensure_parent,
                        drop_excluded_stocks)

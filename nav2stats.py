@@ -12,7 +12,7 @@ plt.rcParams['figure.figsize'] = (30,16)
 plt.rcParams['axes.titlesize'] = 36
 plt.rcParams['axes.titleweight'] = 3
 
-from CommonFunctions import conn2db
+from common_functions import conn2db
 # Connections are created lazily inside the methods that need them (and only
 # when isupdate>0). Export the QUANT_DB_* env vars to enable online fetching.
 # wind_conn = conn2db('wind_conn')
@@ -23,7 +23,7 @@ import os, sys, inspect
 import logging
 
 
-from CommonFunctions import conn2db
+from common_functions import conn2db
 from settings import START_DATE, END_DATE, SPECIAL_DATE, UNIVERSES, INIT_AMOUNT, FEE_RATE, DAYS_PER_YEAR, BARRA_RENAME
 from data_spec import NEU, DATA_DIR, LOG_DIR, ensure_parent
 
