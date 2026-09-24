@@ -1,57 +1,58 @@
-# 欢迎使用 backtest 👋
+# Welcome to backtest 👋
 
 ![Version](https://img.shields.io/badge/version-0.1.0-blue.svg?cacheSeconds=2592000)
 ![Prerequisite](https://img.shields.io/badge/python-%3E%3D3.12-blue.svg)
 
-简体中文 | [English](README.en.md)
+English | [简体中文](README.zh-CN.md)
 
-> 基于持仓的日频股票因子回测框架：因子中性化、Rank IC、分组回测、多空组合、Top N 组合与绩效统计。
+> Position-based daily stock factor backtesting framework: factor neutralization, Rank IC, group tests, long-short portfolios, top-N portfolios and performance statistics.
 
-覆盖一个因子从研究到组合评估的完整流程：
+It covers the full path of a factor from research to portfolio evaluation:
 
 ```
                      ┌─────────────────────────┐
- 原始因子 ──(可选)──▶ │ ① factor_neutralize.py  │ 去极值 → 标准化 → 行业中位数填充 → 行业+市值中性化
+ raw factors ─(opt)─▶ │ ① factor_neutralize.py  │ winsorize → standardize → fill with industry median → industry + size neutralization
                      └───────────┬─────────────┘
                                  ▼
           ② ic_tests.py         Rank IC / ICIR
-          ③ group_backtest.py   N 分组回测，自动判定因子方向
-          ④ long_short.py       头尾两组构建多空组合并统计
-          ⑤ top_n_portfolio.py  按因子方向选 Top N 构建多头组合（支持增量更新）
-          ⑥ portfolio_stats.py  组合相对基准指数的绩效统计
+          ③ group_backtest.py   N-group backtest, detects the factor direction
+          ④ long_short.py       long-short portfolio from the top and bottom groups
+          ⑤ top_n_portfolio.py  long-only top-N portfolio per factor direction (incremental updates)
+          ⑥ portfolio_stats.py  portfolio performance relative to a benchmark index
 ```
 
-所有脚本只读写本地 parquet / Excel 文件，**不依赖任何数据库**。按照[数据规则](#数据规则)准备数据，
-在 [`settings.py`](settings.py) 中设置参数，然后运行 `python main.py` 即可。
+Every script reads and writes local parquet / Excel files only; **no database is needed**. Prepare your data according to the
+[data specification](#data-specification), set parameters in [`settings.py`](settings.py), then run `python main.py`.
 
-## 目录
+## Table of contents
 
-- [前置条件](#前置条件)
-- [安装](#安装)
-- [使用](#使用)
-- [目录结构](#目录结构)
-- [数据规则](#数据规则)
-- [参数设置](#参数设置)
-- [各步骤的输入与输出](#各步骤的输入与输出)
-- [回测引擎的计算口径](#回测引擎的计算口径)
-- [与原框架相比的改动](#与原框架相比的改动)
+- [Prerequisites](#prerequisites)
+- [Install](#install)
+- [Usage](#usage)
+- [Project layout](#project-layout)
+- [Data specification](#data-specification)
+- [Settings](#settings)
+- [Inputs and outputs of each step](#inputs-and-outputs-of-each-step)
+- [How the backtest engine computes NAV](#how-the-backtest-engine-computes-nav)
+- [Changes from the original framework](#changes-from-the-original-framework)
 
-## 前置条件
+## Prerequisites
 
 - python >=3.12
 - [uv](https://docs.astral.sh/uv/)
 
-## 安装
+## Install
 
 ```sh
 uv sync
 ```
 
-依赖见 [`pyproject.toml`](pyproject.toml)。pandas 限定为 `<3`，原因见[与原框架相比的改动](#与原框架相比的改动)。
+Dependencies are listed in [`pyproject.toml`](pyproject.toml). pandas is pinned to `<3`; see
+[Changes from the original framework](#changes-from-the-original-framework) for why.
 
-## 使用
+## Usage
 
-### 用模拟数据试跑
+### Try it with demo data
 
 ```sh
 uv run python make_demo_data.py
@@ -61,159 +62,162 @@ uv run python make_demo_data.py
 uv run python main.py
 ```
 
-`make_demo_data.py` 会在 `data/` 下生成一套随机模拟的 A 股数据（800 只股票、约 5 年、2 个因子）。数据格式完全符合数据规则，
-可以直接跑通全部流程（约 1–2 分钟），也可以作为准备自己数据时的样例。
+`make_demo_data.py` writes a randomly simulated A-share dataset to `data/` (800 stocks, about 5 years, 2 factors). It follows the
+data specification exactly, runs through the whole pipeline (about 1–2 minutes), and doubles as a template for preparing your own data.
 
-### 使用自己的数据
+### Use your own data
 
-1. 按[数据规则](#数据规则)把文件放到数据目录（默认 `./data`，或设置环境变量 `BACKTEST_DATA_DIR`）；
-2. 修改 [`settings.py`](settings.py)（回测区间、股票池、基准等，见[参数设置](#参数设置)）；
-3. 检查数据：`uv run python data_spec.py`；
-4. 运行：`uv run python main.py`。
+1. Put your files in the data directory (`./data` by default, or set the `BACKTEST_DATA_DIR` environment variable) following the [data specification](#data-specification);
+2. Edit [`settings.py`](settings.py) (backtest period, universes, benchmarks, …; see [Settings](#settings));
+3. Check the data: `uv run python data_spec.py`;
+4. Run: `uv run python main.py`.
 
-### 单独运行某一步
+### Run individual steps
 
 ```sh
 uv run python main.py testing long_short
 ```
 
-步骤名为 `neutralize ic testing long_short update stats`，依次对应 ①–⑥。也可以直接运行脚本（如 `uv run python ic_tests.py`），但这样不会先做数据检查。
+Step names are `neutralize ic testing long_short update stats`, matching steps ①–⑥ in order. You can also run a script directly
+(e.g. `uv run python ic_tests.py`), but then the data check is skipped.
 
-单因子 5 分组测试不在 `main.py` 流程中，需要单独运行：
+The single-factor 5-group test is not part of the `main.py` pipeline and is run on its own:
 
 ```sh
 uv run python single_factor_group_backtest.py alpha_signal
 ```
 
-## 目录结构
+## Project layout
 
-### 代码
+### Code
 
-| 文件 | 作用 |
+| File | Purpose |
 |---|---|
-| [`settings.py`](settings.py) | **全部可调参数**，一般只需要修改这个文件 |
-| [`data_spec.py`](data_spec.py) | **数据规则**：数据目录结构、文件名、必需字段，以及数据检查 `validate()` |
-| [`main.py`](main.py) | 一键运行：先检查数据，再依次运行 ①–⑥ |
-| [`make_demo_data.py`](make_demo_data.py) | 生成符合规则的模拟数据 |
-| [`factor_neutralize.py`](factor_neutralize.py) | ① 因子中性化 |
+| [`settings.py`](settings.py) | **All tunable parameters**; usually the only file you edit |
+| [`data_spec.py`](data_spec.py) | **Data specification**: directory layout, file names, required columns, and the data check `validate()` |
+| [`main.py`](main.py) | One-command run: checks the data, then runs ①–⑥ in order |
+| [`make_demo_data.py`](make_demo_data.py) | Generates demo data that follows the specification |
+| [`factor_neutralize.py`](factor_neutralize.py) | ① Factor neutralization |
 | [`ic_tests.py`](ic_tests.py) | ② Rank IC / ICIR |
-| [`group_backtest.py`](group_backtest.py) | ③ 分组回测 + 因子方向判定 |
-| [`long_short.py`](long_short.py) | ④ 多空组合统计 |
-| [`top_n_portfolio.py`](top_n_portfolio.py) | ⑤ Top N 因子多头组合 |
-| [`portfolio_stats.py`](portfolio_stats.py) | ⑥ 组合绩效统计（相对基准） |
-| [`single_factor_group_backtest.py`](single_factor_group_backtest.py) | 回测引擎原型 + 单因子 5 分组测试 |
-| [`common_functions.py`](common_functions.py) | 数据库连接等公共函数（离线运行用不到） |
+| [`group_backtest.py`](group_backtest.py) | ③ Group backtest + factor direction |
+| [`long_short.py`](long_short.py) | ④ Long-short statistics |
+| [`top_n_portfolio.py`](top_n_portfolio.py) | ⑤ Top-N long-only factor portfolios |
+| [`portfolio_stats.py`](portfolio_stats.py) | ⑥ Portfolio performance statistics (vs benchmark) |
+| [`single_factor_group_backtest.py`](single_factor_group_backtest.py) | Backtest engine prototype + single-factor 5-group test |
+| [`common_functions.py`](common_functions.py) | Database connection and other helpers (not needed offline) |
 
-③⑤⑥ 和 `single_factor_group_backtest.py` 中各有一份 `Positions2Nav` 类，即"持仓 → 净值"的回测引擎，逻辑见[回测引擎的计算口径](#回测引擎的计算口径)。
+③, ⑤, ⑥ and `single_factor_group_backtest.py` each contain a copy of the `Positions2Nav` class, the "positions → NAV" backtest
+engine; see [How the backtest engine computes NAV](#how-the-backtest-engine-computes-nav).
 
-### 数据目录（`DATA_DIR`）
+### Data directory (`DATA_DIR`)
 
 ```
 data/
-├── config/                          # ── 输入：配置表 ──
-│   ├── factors_dict.xlsx            # 因子清单
-│   ├── factors_dict_neutral.xlsx    # 因子清单（NEUTRAL=True 时使用）
-│   ├── portfolio_info.xlsx          # Top N 组合定义（⑤⑥ 使用）
-│   ├── portfolio_info_neutral.xlsx  # 同上（NEUTRAL=True 时使用）
-│   └── rebalance_dates.pq           # 调仓日历
-├── market_data/                     # ── 输入：行情与股票属性 ──
+├── config/                          # ── input: configuration tables ──
+│   ├── factors_dict.xlsx            # factor list
+│   ├── factors_dict_neutral.xlsx    # factor list (used when NEUTRAL=True)
+│   ├── portfolio_info.xlsx          # top-N portfolio definitions (used by ⑤⑥)
+│   ├── portfolio_info_neutral.xlsx  # same (used when NEUTRAL=True)
+│   └── rebalance_dates.pq           # rebalance calendar
+├── market_data/                     # ── input: prices and stock attributes ──
 │   ├── trading_days.pq
 │   ├── stock_market.pq
 │   ├── stock_status.pq
-│   ├── barra_factors.pq             # 仅中性化需要
+│   ├── barra_factors.pq             # neutralization only
 │   └── index_prices.pq
 ├── factor_data/
-│   ├── factors/<因子名>.pq           # ── 输入：原始因子 ──
-│   └── factors_neutral/<因子名>.pq   # 输出：① 生成
-├── results/                         # 输出：②④
-├── g_positions/                     # 输出：③⑤ 每期持仓
-├── navs/                            # 输出：③⑤ 净值
-├── pics/                            # 输出：③ 分组净值图
-├── portfolios/                      # 输出：⑥
-└── logs/                            # 运行日志
+│   ├── factors/<factor>.pq          # ── input: raw factors ──
+│   └── factors_neutral/<factor>.pq  # output of ①
+├── results/                         # output of ②④
+├── g_positions/                     # output of ③⑤: holdings per rebalance
+├── navs/                            # output of ③⑤: NAVs
+├── pics/                            # output of ③: group NAV charts
+├── portfolios/                      # output of ⑥
+└── logs/                            # run logs
 ```
 
-`data/` 已写入 `.gitignore`。引擎还会自动建立 `org_data/`、`positions/`、`factor_rotation/` 三个空目录（原框架遗留，无内容）。
+`data/` is in `.gitignore`. The engine also creates three empty directories, `org_data/`, `positions/` and `factor_rotation/`
+(left over from the original framework).
 
-## 数据规则
+## Data specification
 
-规则同时写在 [`data_spec.py`](data_spec.py) 中。运行 `python data_spec.py` 会按规则检查数据目录并列出所有问题，
-`main.py` 运行前也会自动检查。
+The rules are also encoded in [`data_spec.py`](data_spec.py). `python data_spec.py` checks the data directory against them and lists
+every problem; `main.py` runs the same check before starting.
 
-### 通用约定
+### General conventions
 
-- 所有 `.pq` 文件都是 **parquet** 格式。
-- `date` 列（以及 `position_adjust_date`）必须是 **datetime64**（不带时区），只包含交易日。
-- `stock_id` 列是**字符串**，所有文件使用同一种代码格式（如 `600000.SH`）。
-- 除 `index_prices.pq` 外，行情类文件都是**长表**：每行一个 `(date, stock_id)`，且不能重复。
-- 0/1 标记列用整数 0 / 1，不能有缺失值。
+- All `.pq` files are **parquet**.
+- `date` columns (and `position_adjust_date`) must be **datetime64** without a time zone and contain trading days only.
+- `stock_id` is a **string** and uses the same code format in every file (e.g. `600000.SH`).
+- Apart from `index_prices.pq`, market files are **long tables**: one row per `(date, stock_id)`, with no duplicates.
+- 0/1 flag columns hold integers 0 / 1 with no missing values.
 
-### `market_data/trading_days.pq`：交易日历
+### `market_data/trading_days.pq`: trading calendar
 
-| 列 | 类型 | 说明 |
+| Column | Type | Description |
 |---|---|---|
-| `date` | datetime64 | 全部交易日，需覆盖回测区间 |
+| `date` | datetime64 | All trading days; must cover the backtest period |
 
-### `market_data/stock_market.pq`：日行情
+### `market_data/stock_market.pq`: daily prices
 
-| 列 | 类型 | 说明 |
+| Column | Type | Description |
 |---|---|---|
-| `date`, `stock_id` | | 主键 |
-| `open`, `high`, `low`, `close` | float | 当日开高低收（不复权即可）。`open == high == low == close` 的"一字板"当天不进入选股样本 |
-| `adj_close` | float | 复权收盘价 |
-| `adj_pre_close` | float | 同一复权口径下的前收盘价。**日收益率 = `adj_close / adj_pre_close - 1`** |
-| `trade_status` | int | 1 = 当日正常交易，其余 = 停牌等不可交易 |
-| `float_mv` | float | 流通市值。**仅当某个股票池 `weighting='float_mv'` 时必需** |
+| `date`, `stock_id` | | Key |
+| `open`, `high`, `low`, `close` | float | Daily OHLC (unadjusted is fine). On days with `open == high == low == close` (a limit-locked bar) the stock is excluded from selection |
+| `adj_close` | float | Adjusted close |
+| `adj_pre_close` | float | Previous close on the same adjustment basis. **Daily return = `adj_close / adj_pre_close - 1`** |
+| `trade_status` | int | 1 = traded normally that day; anything else = suspended / not tradable |
+| `float_mv` | float | Free-float market value. **Required only if a universe uses `weighting='float_mv'`** |
 
-没有 `adj_pre_close` 时，可以用 `df.groupby('stock_id')['adj_close'].shift(1)` 生成（上市首日需另行填充）。
+If you have no `adj_pre_close`, build it with `df.groupby('stock_id')['adj_close'].shift(1)` (fill the listing day separately).
 
-### `market_data/stock_status.pq`：股票属性
+### `market_data/stock_status.pq`: stock attributes
 
-| 列 | 类型 | 说明 |
+| Column | Type | Description |
 |---|---|---|
-| `date`, `stock_id` | | 主键 |
-| `is_ST` | int | 1 = ST 等需剔除的股票（非 A 股可全填 0） |
-| `is_new_stock` | int | 1 = 次新股；股票池 `exclude_new_stock=True` 时被剔除 |
-| `<股票池名>` | int | **`settings.UNIVERSES` 中每个股票池一列**，1 = 当日属于该股票池，例如 `hs300`、`zz500`、`kc` |
-| `<INDUSTRY_PREFIX><行业名>` | int | 行业哑变量（默认前缀 `ind_`，如 `ind_banks`），每行恰好一个 1。**仅中性化需要** |
+| `date`, `stock_id` | | Key |
+| `is_ST` | int | 1 = ST or otherwise excluded stock (use all 0 outside China A-shares) |
+| `is_new_stock` | int | 1 = recently listed; excluded when the universe has `exclude_new_stock=True` |
+| `<universe>` | int | **One column per universe in `settings.UNIVERSES`**; 1 = member on that day, e.g. `hs300`, `zz500`, `kc` |
+| `<INDUSTRY_PREFIX><industry>` | int | Industry dummies (default prefix `ind_`, e.g. `ind_banks`), exactly one 1 per row. **Neutralization only** |
 
-### `market_data/barra_factors.pq`：风格暴露（仅中性化需要）
+### `market_data/barra_factors.pq`: style exposures (neutralization only)
 
-| 列 | 类型 | 说明 |
+| Column | Type | Description |
 |---|---|---|
-| `date`, `stock_id` | | 主键 |
-| `size` | float | 市值因子暴露，例如 `log(流通市值)` |
+| `date`, `stock_id` | | Key |
+| `size` | float | Size exposure, e.g. `log(free-float market value)` |
 
-### `market_data/index_prices.pq`：指数收盘价（宽表）
+### `market_data/index_prices.pq`: index closes (wide table)
 
-- 索引：`DatetimeIndex`（交易日）；
-- 列：指数代码，**必须包含 `settings.UNIVERSES` 中所有 `benchmark`**；
-- 值：收盘点位。
+- Index: `DatetimeIndex` (trading days);
+- Columns: index codes, **which must include every `benchmark` in `settings.UNIVERSES`**;
+- Values: closing levels.
 
 ```python
 index_prices = long_df.pivot(index='date', columns='index_code', values='close')
 index_prices.to_parquet('data/market_data/index_prices.pq')
 ```
 
-### `factor_data/factors/<因子名>.pq`：因子值
+### `factor_data/factors/<factor>.pq`: factor values
 
-| 列 | 类型 | 说明 |
+| Column | Type | Description |
 |---|---|---|
-| `date` | datetime64 | 因子日期，因子值只能使用该日收盘及之前的信息 |
+| `date` | datetime64 | Factor date; the value may only use information available at that day's close |
 | `stock_id` | str | |
-| `factor_value` | float | 因子值，缺失可为 NaN（会被剔除） |
+| `factor_value` | float | Factor value; NaN allowed (dropped) |
 
-文件名（不含 `.pq`）就是因子名，必须与 `factors_dict.xlsx` 中的 `factor_name` 一致。IC 测试使用文件中的所有日期；
-分组回测和 Top N 组合只使用 `rebalance_dates.pq` 中信号日的因子值。
+The file name without `.pq` is the factor name and must match `factor_name` in `factors_dict.xlsx`. The IC test uses every date in
+the file; the group backtest and top-N portfolios only use factor values on the signal dates in `rebalance_dates.pq`.
 
-### `config/rebalance_dates.pq`：调仓日历
+### `config/rebalance_dates.pq`: rebalance calendar
 
-| 列 | 类型 | 说明 |
+| Column | Type | Description |
 |---|---|---|
-| `date` | datetime64 | 信号日：用这一天的因子值选股 |
-| `position_adjust_date` | datetime64 | 生效日：按新权重以收盘价调仓（通常为信号日的下一交易日） |
+| `date` | datetime64 | Signal date: stocks are selected with this day's factor values |
+| `position_adjust_date` | datetime64 | Effective date: the portfolio is rebalanced to the new weights at the close (usually the next trading day) |
 
-例：每月最后一个交易日出信号，下一交易日调仓
+Example: signal on the last trading day of each month, rebalance on the next trading day
 
 ```python
 days = pd.read_parquet('data/market_data/trading_days.pq')['date']
@@ -222,176 +226,180 @@ rebalance = pd.DataFrame({'date': days, 'position_adjust_date': days.shift(-1)})
 rebalance.dropna().to_parquet('data/config/rebalance_dates.pq')
 ```
 
-### `config/factors_dict.xlsx`：因子清单
+### `config/factors_dict.xlsx`: factor list
 
-| 列 | 说明 |
+| Column | Description |
 |---|---|
-| `factor_id` | 整数编号（多空统计中作为组合编号） |
-| `factor_name` | 因子名，对应 `factor_data/factors/<factor_name>.pq` |
+| `factor_id` | Integer id (used as the portfolio id in the long-short statistics) |
+| `factor_name` | Factor name, matching `factor_data/factors/<factor_name>.pq` |
 
-`NEUTRAL=True` 时读取 `factors_dict_neutral.xlsx`（内容相同即可，复制一份）；中性化步骤本身始终读取 `factors_dict.xlsx`。
-③ 运行后会在该表中**为每个股票池追加一列因子方向得分**（见[因子方向约定](#因子方向约定)）。
+With `NEUTRAL=True` the file `factors_dict_neutral.xlsx` is read instead (a copy with the same content is enough); the
+neutralization step itself always reads `factors_dict.xlsx`. Step ③ **appends one factor-direction column per universe** to this
+table (see [Factor direction convention](#factor-direction-convention)).
 
-### `config/portfolio_info.xlsx`：Top N 组合定义（⑤⑥ 使用）
+### `config/portfolio_info.xlsx`: top-N portfolio definitions (used by ⑤⑥)
 
-sheet 名必须为 `portfolio_info`，每行一个组合：
+The sheet must be named `portfolio_info`, one portfolio per row:
 
-| 列 | 说明 |
+| Column | Description |
 |---|---|
-| `portfolio_id` | 整数，唯一 |
-| `portfolio_name` | 组合名，格式 `因子名#任意后缀`，`#` 前的部分在统计表中作为因子名 |
-| `portfolio_type` | `factor` / `portfolio` / `smart_beta` / `index_enhance` 之一，其他类型不计算净值 |
-| `factor_name` | 使用的因子 |
-| `factor_direction` | `1` = 选因子值最小的 N 只；`-1` = 选最大的 N 只；`0` = 跳过 |
-| `stock_area` | 股票池名，必须在 `settings.UNIVERSES` 中；每个股票池内每个因子只取第一行 |
-| `benchmark`, `barra_adjusted`, `frequency` | 描述字段，原样写入统计结果 |
+| `portfolio_id` | Unique integer |
+| `portfolio_name` | Portfolio name in the form `factor#any_suffix`; the part before `#` is shown as the factor name in the statistics |
+| `portfolio_type` | One of `factor` / `portfolio` / `smart_beta` / `index_enhance`; other types get no NAV |
+| `factor_name` | Factor to use |
+| `factor_direction` | `1` = pick the N smallest factor values; `-1` = pick the N largest; `0` = skip |
+| `stock_area` | Universe name, must be in `settings.UNIVERSES`; within a universe only the first row per factor is used |
+| `benchmark`, `barra_adjusted`, `frequency` | Descriptive fields copied into the statistics as is |
 
-`NEUTRAL=True` 时读取 `portfolio_info_neutral.xlsx`。
+With `NEUTRAL=True` the file `portfolio_info_neutral.xlsx` is read instead.
 
-### 可选：数据库模式
+### Optional: database mode
 
-原框架的数据库拉数功能完整保留（各脚本 `isupdate_data` 中 `stock_prices` / `index_prices` > 0 时启用），
-需要设置 `QUANT_DB_*` 环境变量（见 [`common_functions.py`](common_functions.py)）以及 `config/index_info.xlsx`。
-SQL 针对原公司的 Wind 库表结构编写，默认全部关闭，离线运行不需要。
+The original framework's database fetching is kept intact (enabled when `stock_prices` / `index_prices` > 0 in a script's
+`isupdate_data`). It needs the `QUANT_DB_*` environment variables (see [`common_functions.py`](common_functions.py)) and
+`config/index_info.xlsx`. The SQL targets the original company's Wind database schema; it is off by default and not needed offline.
 
-## 参数设置
+## Settings
 
-所有参数都在 [`settings.py`](settings.py) 中：
+All parameters live in [`settings.py`](settings.py):
 
-| 参数 | 默认值 | 作用 |
+| Parameter | Default | Purpose |
 |---|---|---|
-| `DATA_DIR` | `./data` | 数据根目录；设置环境变量 `BACKTEST_DATA_DIR` 可覆盖 |
-| `START_DATE` / `END_DATE` | `20200930` / `20250630` | 回测区间 |
-| `SPECIAL_DATE` | `20241231` | `ret_special_date`、`adv_navs_fsd` 的起点，必须是区间内交易日 |
-| `NEUTRAL` | `False` | 是否使用中性化因子；`True` 时 `main.py` 先运行 ①，其后所有输入输出带 `_neutral` 后缀 |
-| `UNIVERSES` | 5 个 A 股股票池 | 见下 |
-| `N_GROUPS` | `10` | ③ 分组数，组号 `1000`（因子值最小）… `1000+N_GROUPS-1`（最大）；④ 用两端的组 |
-| `INIT_AMOUNT` | `1e7` | 初始资金 |
-| `FEE_RATE` | `1.5e-3` | 单边费率，按每只股票调仓金额收取 |
-| `WEIGHT_CAP` | `0.05` | `weighting='float_mv'` 时的单票权重上限 |
-| `DAYS_PER_YEAR` | `242` | 年化天数（A 股 242，美股可改 252） |
-| `INDUSTRY_PREFIX` | `'ind_'` | 行业哑变量列前缀 |
-| `EXCLUDE_ID_SUFFIXES` / `EXCLUDE_ID_PREFIXES` / `EXCLUDE_IDS` | `('.BJ','.NE','.WI')` / `('A',)` / `('000024.SZ',)` | 原框架对 A 股 Wind 代码的清洗规则。**使用非 A 股数据时请全部改成 `()`**，否则如 `AAPL` 会因前缀 `A` 被剔除 |
-| `BARRA_RENAME` | `False` | ⑥ 是否用 `portfolio_info` 中 sheet `软约束限BARRA_{barra_sheet}_01` 的映射重命名组合 |
+| `DATA_DIR` | `./data` | Data root; override with the `BACKTEST_DATA_DIR` environment variable |
+| `START_DATE` / `END_DATE` | `20200930` / `20250630` | Backtest period |
+| `SPECIAL_DATE` | `20241231` | Start of `ret_special_date` and `adv_navs_fsd`; must be a trading day inside the period |
+| `NEUTRAL` | `False` | Use neutralized factors; when `True`, `main.py` runs ① first and every later input/output gets a `_neutral` suffix |
+| `UNIVERSES` | 5 A-share universes | See below |
+| `N_GROUPS` | `10` | Number of groups in ③, ids `1000` (smallest factor values) … `1000+N_GROUPS-1` (largest); ④ uses the two ends |
+| `INIT_AMOUNT` | `1e7` | Initial capital |
+| `FEE_RATE` | `1.5e-3` | One-way fee rate, charged on each stock's traded amount |
+| `WEIGHT_CAP` | `0.05` | Per-stock weight cap for `weighting='float_mv'` |
+| `DAYS_PER_YEAR` | `242` | Trading days per year for annualization (242 for A-shares; 252 for e.g. US stocks) |
+| `INDUSTRY_PREFIX` | `'ind_'` | Prefix of the industry dummy columns |
+| `EXCLUDE_ID_SUFFIXES` / `EXCLUDE_ID_PREFIXES` / `EXCLUDE_IDS` | `('.BJ','.NE','.WI')` / `('A',)` / `('000024.SZ',)` | The original framework's cleaning rules for A-share Wind codes. **Set all of them to `()` for non-A-share data**, otherwise e.g. `AAPL` is dropped for its `A` prefix |
+| `BARRA_RENAME` | `False` | ⑥ renames portfolios using the mapping in sheet `软约束限BARRA_{barra_sheet}_01` of `portfolio_info` |
 
-`UNIVERSES` 的每一项：
+Each entry of `UNIVERSES`:
 
 ```python
-'hs300': {'benchmark': '000300.SH',   # 基准指数代码（index_prices.pq 的列）
-          'top_n': 100,               # ⑤ 持股数
-          'weighting': 'equal',       # 'equal' 等权；'float_mv' 流通市值加权并限制单票上限
-          'exclude_new_stock': True,  # 是否剔除 is_new_stock == 1
-          'barra_sheet': '300'},      # 仅 BARRA_RENAME=True 时使用
+'hs300': {'benchmark': '000300.SH',   # benchmark index code (a column of index_prices.pq)
+          'top_n': 100,               # number of holdings in ⑤
+          'weighting': 'equal',       # 'equal' = equal weight; 'float_mv' = float-cap weighted with a per-stock cap
+          'exclude_new_stock': True,  # drop is_new_stock == 1
+          'barra_sheet': '300'},      # only used when BARRA_RENAME=True
 ```
 
-增删股票池只需增删这一项，并在 `stock_status.pq` 中提供同名的 0/1 列。所有步骤都会遍历 `UNIVERSES` 中的全部股票池。
+To add or remove a universe, add or remove its entry and provide a 0/1 column with the same name in `stock_status.pq`. Every step
+loops over all universes in `UNIVERSES`.
 
-**写在代码中、未放入 `settings.py` 的常数**（属于计算逻辑本身，保持原样）：
+**Constants kept in the code rather than `settings.py`** (they are part of the calculation logic and left unchanged):
 
-| 位置 | 常数 |
+| Where | Constant |
 |---|---|
-| 回测引擎 `calculate_position_core` / `config` | 建仓与每次调仓时投资 95%，保留 5% 现金 |
-| `ic_tests.py` | 未来收益窗口：`t+1` 到 `t+21` 收盘（`ret_20D`）；`Rank_ICIR = mean(IC) / (std(IC)·√252)` |
-| `factor_neutralize.py` | MAD 去极值阈值 3×1.4826×MAD，截面唯一值少于 100 时跳过去极值 |
-| 各 `statistics_core_1` | 近 6 月 / 3 月 / 1 月 / 1 周 / 3 日 / 2 日 / 1 日收益分别以倒数第 121 / 64 / 22 / 6 / 4 / 3 / 2 个净值为起点（近 1 年为倒数第 `DAYS_PER_YEAR` 个） |
-| `single_factor_group_backtest.py` | 单因子测试固定为 5 组 |
+| Engine `calculate_position_core` / `config` | 95% invested at the first build and at every rebalance, 5% kept in cash |
+| `ic_tests.py` | Forward-return window: close `t+1` to close `t+21` (`ret_20D`); `Rank_ICIR = mean(IC) / (std(IC)·√252)` |
+| `factor_neutralize.py` | MAD winsorization at 3×1.4826×MAD; skipped when a cross-section has fewer than 100 unique values |
+| each `statistics_core_1` | Recent 6-month / 3-month / 1-month / 1-week / 3-day / 2-day / 1-day returns start from the 121st / 64th / 22nd / 6th / 4th / 3rd / 2nd NAV from the end (1 year: the `DAYS_PER_YEAR`-th) |
+| `single_factor_group_backtest.py` | The single-factor test always uses 5 groups |
 
-## 各步骤的输入与输出
+## Inputs and outputs of each step
 
-`{neu}` 表示 `NEUTRAL=True` 时为 `_neutral`，否则为空；`{u}` 为股票池名；`{f}` 为因子名。所有输出目录会自动创建。
+`{neu}` is `_neutral` when `NEUTRAL=True` and empty otherwise; `{u}` is the universe name; `{f}` is the factor name. All output
+directories are created automatically.
 
-### ① `factor_neutralize.py`：因子中性化
+### ① `factor_neutralize.py`: factor neutralization
 
-- **输入**：`factors_dict.xlsx`、`factors/{f}.pq`、`stock_status.pq`（行业哑变量）、`barra_factors.pq`
-- **处理**（每个交易日截面）：MAD 去极值 → z-score → 行业中位数填充缺失 → 对「行业哑变量 + size」做 OLS，取残差
-- **输出**：`factor_data/factors_neutral/{f}.pq`（`date, stock_id, factor_value`）
+- **Inputs**: `factors_dict.xlsx`, `factors/{f}.pq`, `stock_status.pq` (industry dummies), `barra_factors.pq`
+- **Processing** (per trading-day cross-section): MAD winsorization → z-score → fill missing values with the industry median → OLS on industry dummies + size, keep the residual
+- **Output**: `factor_data/factors_neutral/{f}.pq` (`date, stock_id, factor_value`)
 
-### ② `ic_tests.py`：Rank IC
+### ② `ic_tests.py`: Rank IC
 
-- **输入**：`factors_dict{neu}.xlsx`、`factors{neu}/{f}.pq`、`stock_market.pq`（`adj_close`）、`stock_status.pq`（股票池列）
-- **输出**：`results/icir{neu}/icir_stats_{u}.xlsx`
-  - `日度Rank_IC`：每日股票池内因子值与未来 20 日收益的 Spearman 相关系数，每个因子一列
-  - `累计Rank_IC`：日度 IC 的累加
-  - `Rank_ICIR`：`mean / (std·√252)`
+- **Inputs**: `factors_dict{neu}.xlsx`, `factors{neu}/{f}.pq`, `stock_market.pq` (`adj_close`), `stock_status.pq` (universe columns)
+- **Output**: `results/icir{neu}/icir_stats_{u}.xlsx`
+  - `日度Rank_IC` (daily Rank IC): Spearman correlation between factor values and the next 20-day return within the universe, one column per factor
+  - `累计Rank_IC` (cumulative Rank IC): running sum of the daily IC
+  - `Rank_ICIR`: `mean / (std·√252)`
 
-### ③ `group_backtest.py`：分组回测
+### ③ `group_backtest.py`: group backtest
 
-- **输入**：`factors_dict{neu}.xlsx`、`factors{neu}/{f}.pq`、`stock_market.pq`、`stock_status.pq`、`rebalance_dates.pq`、`trading_days.pq`、`index_prices.pq`
-- **样本**：信号日属于该股票池、`trade_status == 1`、`is_ST == 0`、非一字板、（可选）非次新股、因子值非空
-- **分组**：每个信号日按因子值排序（同值按出现顺序），等分为 `N_GROUPS` 组，组内等权（`weighting='float_mv'` 时流通市值加权并封顶 `WEIGHT_CAP`）
-- **输出**
-  - `g_positions/g_positions_testing{neu}/{u}/g_positions_{f}.pq`：`portfolio_id`（组号）、`date`（生效日）、`instrument`、`weight`
-  - `navs/navs_testing{neu}/{u}/navs_{f}.pq`：`portfolio_id, date, nav, turn_over`
-  - `pics/pics{neu}/{u}/navs_{f}.jpg`：各组净值曲线
-  - `factors_dict{neu}.xlsx` 增加一列 `{u}`：因子方向得分
+- **Inputs**: `factors_dict{neu}.xlsx`, `factors{neu}/{f}.pq`, `stock_market.pq`, `stock_status.pq`, `rebalance_dates.pq`, `trading_days.pq`, `index_prices.pq`
+- **Sample**: on the signal date the stock is in the universe, `trade_status == 1`, `is_ST == 0`, not limit-locked, (optionally) not newly listed, and has a factor value
+- **Grouping**: on each signal date stocks are sorted by factor value (ties in order of appearance) and split into `N_GROUPS` equal-count groups; equal weights within a group (float-cap weights capped at `WEIGHT_CAP` when `weighting='float_mv'`)
+- **Outputs**
+  - `g_positions/g_positions_testing{neu}/{u}/g_positions_{f}.pq`: `portfolio_id` (group id), `date` (effective date), `instrument`, `weight`
+  - `navs/navs_testing{neu}/{u}/navs_{f}.pq`: `portfolio_id, date, nav, turn_over`
+  - `pics/pics{neu}/{u}/navs_{f}.jpg`: NAV chart of every group
+  - `factors_dict{neu}.xlsx` gets a column `{u}` with the factor-direction score
 
-#### 因子方向约定
+#### Factor direction convention
 
-方向得分 = 组号排名（1000 → 1）与夏普比率排名（最高 → 1）的 Spearman 相关系数：
+Direction score = Spearman correlation between the group-id rank (1000 → 1) and the Sharpe-ratio rank (highest → 1):
 
-- **得分 > 0**：因子值**越小**越好 → ④ 做多 1000 组、做空最后一组；⑤ 中对应 `factor_direction = 1`
-- **得分 < 0**：因子值**越大**越好 → ④ 做多最后一组、做空 1000 组；⑤ 中对应 `factor_direction = -1`
+- **score > 0**: **smaller** factor values are better → ④ goes long group 1000 and short the last group; in ⑤ use `factor_direction = 1`
+- **score < 0**: **larger** factor values are better → ④ goes long the last group and short group 1000; in ⑤ use `factor_direction = -1`
 
-### ④ `long_short.py`：多空组合
+### ④ `long_short.py`: long-short portfolio
 
-- **输入**：`factors_dict{neu}.xlsx`（需含 ③ 写入的方向列）、③ 的 `navs_testing{neu}`、`index_prices.pq`
-- **计算**：多头组日收益 − 空头组日收益，累乘得多空净值
-- **输出**：`results/long_short{neu}/long_short_stats_{u}.xlsx`
-  - `factor_statistic`：每个因子一行，指标见[统计指标说明](#统计指标说明)（仅绝对收益部分）
-  - `navs`：多空净值；`navs_r3m`：最近 90 天归一化净值
+- **Inputs**: `factors_dict{neu}.xlsx` (with the direction columns written by ③), `navs_testing{neu}` from ③, `index_prices.pq`
+- **Calculation**: daily return of the long group minus that of the short group, compounded into a long-short NAV
+- **Output**: `results/long_short{neu}/long_short_stats_{u}.xlsx`
+  - `factor_statistic`: one row per factor; see [Statistics](#statistics) (absolute-return metrics only)
+  - `navs`: long-short NAVs; `navs_r3m`: NAVs over the last 90 days, rebased to 1
 
-### ⑤ `top_n_portfolio.py`：Top N 因子组合
+### ⑤ `top_n_portfolio.py`: top-N factor portfolios
 
-- **输入**：`portfolio_info{neu}.xlsx`、`factors{neu}/{f}.pq`、`stock_market.pq`、`stock_status.pq`、`rebalance_dates.pq`、`trading_days.pq`、`index_prices.pq`
-- **选股**：样本同 ③；按 `factor_direction` 排序取前 `top_n` 只，等权（或流通市值加权封顶）
-- **增量**：若 `g_positions{neu}/g_positions_{u}.pq` 已存在，只为上次之后的信号日追加持仓，然后重算全部净值
-- **输出**
-  - `g_positions/g_positions{neu}/g_positions_{u}.pq`：`portfolio_id, date, instrument, weight`
-  - `navs/navs{neu}/navs_{u}.pq`：`portfolio_id, date, nav, turn_over`
+- **Inputs**: `portfolio_info{neu}.xlsx`, `factors{neu}/{f}.pq`, `stock_market.pq`, `stock_status.pq`, `rebalance_dates.pq`, `trading_days.pq`, `index_prices.pq`
+- **Selection**: same sample as ③; sort by `factor_direction` and take the first `top_n` stocks, equal weighted (or float-cap weighted with the cap)
+- **Incremental**: if `g_positions{neu}/g_positions_{u}.pq` already exists, holdings are appended only for signal dates after the last run, then all NAVs are recomputed
+- **Outputs**
+  - `g_positions/g_positions{neu}/g_positions_{u}.pq`: `portfolio_id, date, instrument, weight`
+  - `navs/navs{neu}/navs_{u}.pq`: `portfolio_id, date, nav, turn_over`
 
-  （`NEUTRAL=False` 时目录名为 `navs/navs/`、`g_positions/g_positions/`，与原框架一致）
+  (with `NEUTRAL=False` the directories are `navs/navs/` and `g_positions/g_positions/`, as in the original framework)
 
-### ⑥ `portfolio_stats.py`：组合绩效
+### ⑥ `portfolio_stats.py`: portfolio performance
 
-- **输入**：⑤ 的 `navs/navs{neu}/navs_{u}.pq`、`portfolio_info{neu}.xlsx`、`index_prices.pq`、`trading_days.pq`、`stock_market.pq`
-- **输出**：`portfolios/factor_statistic{neu}/factor_statistic_{u}.xlsx`
+- **Inputs**: `navs/navs{neu}/navs_{u}.pq` from ⑤, `portfolio_info{neu}.xlsx`, `index_prices.pq`, `trading_days.pq`, `stock_market.pq`
+- **Output**: `portfolios/factor_statistic{neu}/factor_statistic_{u}.xlsx`
 
-| sheet | 内容 |
+| Sheet | Contents |
 |---|---|
-| `factor_statistic` | 全部指标 |
-| `factor_statistic_simple` | 常用指标 |
-| `navs` | 组合净值 |
-| `adv_navs` | 超额累计收益（%），超额日收益 = 组合日收益 − 基准日收益 |
-| `navs_r3m` / `adv_navs_r3m` | 最近 90 天（归一化）净值 / 超额（%） |
-| `adv_navs_fsd` | `SPECIAL_DATE` 以来的超额（%） |
+| `factor_statistic` | All metrics |
+| `factor_statistic_simple` | Commonly used metrics |
+| `navs` | Portfolio NAVs |
+| `adv_navs` | Cumulative excess return (%); daily excess return = portfolio return − benchmark return |
+| `navs_r3m` / `adv_navs_r3m` | Last 90 days: rebased NAV / excess return (%) |
+| `adv_navs_fsd` | Excess return since `SPECIAL_DATE` (%) |
 
-### 统计指标说明
+### Statistics
 
-收益、波动、回撤均以 **%** 表示。
+Returns, volatilities and drawdowns are in **%**.
 
-| 指标 | 含义 |
+| Metric | Meaning |
 |---|---|
-| `trading_days` | 净值天数 |
-| `ret_in_period` | 区间累计收益 |
-| `ret_special_date` | `SPECIAL_DATE` 至今收益 |
-| `ret_recent1year` … `ret_recent1day` | 最近 1 年 / 6 月 / 3 月 / 1 月 / 1 周 / 3 日 / 2 日 / 1 日收益 |
-| `annualized_ret` | 年化收益 `nav^(DAYS_PER_YEAR/天数) − 1` |
-| `volatility` | 年化波动（对数收益标准差 × √DAYS_PER_YEAR） |
-| `max_draw_down` | 最大回撤 |
-| `adv_*` | 同上，基于超额净值 |
-| `换手率` | 年化换手：日均（买入 + 卖出金额）/ 组合市值 × DAYS_PER_YEAR |
-| `information_ratio` | `annualized_adv_ret / adv_volatility`（④ 中为 `annualized_ret / volatility`） |
-| `return_mdd_ratio` | 年化（超额）收益 / 最大回撤 |
-| `*_r3month` | 近 3 月超额收益年化后，除以**全区间**超额波动 / 回撤 |
-| `*_recent3month` / `*_recent1month` / `*_recent1week` | 近期超额收益年化后，除以**同期**超额波动 / 回撤 |
+| `trading_days` | Number of NAV days |
+| `ret_in_period` | Cumulative return over the period |
+| `ret_special_date` | Return since `SPECIAL_DATE` |
+| `ret_recent1year` … `ret_recent1day` | Return over the last 1 year / 6 months / 3 months / 1 month / 1 week / 3 days / 2 days / 1 day |
+| `annualized_ret` | Annualized return `nav^(DAYS_PER_YEAR/days) − 1` |
+| `volatility` | Annualized volatility (std of log returns × √DAYS_PER_YEAR) |
+| `max_draw_down` | Maximum drawdown |
+| `adv_*` | Same as above, on the excess-return NAV |
+| `换手率` (turnover) | Annualized turnover: mean daily (buy + sell amount) / portfolio value × DAYS_PER_YEAR |
+| `information_ratio` | `annualized_adv_ret / adv_volatility` (in ④: `annualized_ret / volatility`) |
+| `return_mdd_ratio` | Annualized (excess) return / maximum drawdown |
+| `*_r3month` | Last-3-month excess return, annualized, divided by the **full-period** excess volatility / drawdown |
+| `*_recent3month` / `*_recent1month` / `*_recent1week` | Recent excess return, annualized, divided by the excess volatility / drawdown **of the same window** |
 
-## 回测引擎的计算口径
+## How the backtest engine computes NAV
 
-`Positions2Nav.calculate_position_core` 把每期目标权重转成每日持仓市值：
+`Positions2Nav.calculate_position_core` turns each period's target weights into daily position values:
 
-1. 期初资金 `INIT_AMOUNT`，首次建仓投入 95%，5% 为现金；
-2. 生效日按收盘价调仓，当天不计收益；持仓期内每只股票按 `adj_close / adj_pre_close − 1` 逐日复利；
-3. 每次调仓把"持仓市值 + 现金"的 95% 按新权重分配，交易费用 = `FEE_RATE × |调仓金额|`，从现金中扣除，现金不计息；
-4. 净值 = （持仓市值 + 现金）/ `INIT_AMOUNT`；`turn_over` = 当日（买入 + 卖出）金额 / 组合市值。
+1. Start with `INIT_AMOUNT`; the first build invests 95% and keeps 5% in cash;
+2. Rebalancing happens at the close of the effective date, which earns no return; during the holding period each stock compounds daily at `adj_close / adj_pre_close − 1`;
+3. At every rebalance, 95% of (position value + cash) is allocated to the new weights; the fee is `FEE_RATE × |traded amount|`, paid from cash; cash earns nothing;
+4. NAV = (position value + cash) / `INIT_AMOUNT`; `turn_over` = that day's (buy + sell) amount / portfolio value.
 
-Top N 选股时会给因子值加上 1e-12 量级的随机扰动以打破并列（原框架逻辑），因此因子值存在大量并列时，多次运行结果可能有极小差异。
+When selecting the top N, factor values get a random perturbation of order 1e-12 to break ties (original framework behavior), so
+with many tied factor values, repeated runs can differ very slightly.
