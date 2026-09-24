@@ -119,7 +119,7 @@ if __name__=='__main__':
     factors_dict = pd.read_excel(factors_dict_path(), index_col=None)
     index_prices = pd.read_parquet(INDEX_PRICES)
 
-    # lowest / highest factor-value groups written by positions2nav_testing.py
+    # lowest / highest factor-value groups written by group_backtest.py
     bottom_group, top_group = 1000, 1000 + N_GROUPS - 1
 
     def main(sample_symbol, benchmark_code, index_prices, special_date):
@@ -134,7 +134,7 @@ if __name__=='__main__':
 
             nav_file = datadir + f'/navs/navs_testing{neu}/{sample_symbol}/navs_{factor_name}.pq'
             if not os.path.exists(nav_file):
-                print(f'{sample_symbol}/{factor_name}: {nav_file} not found, run positions2nav_testing.py first; skipped')
+                print(f'{sample_symbol}/{factor_name}: {nav_file} not found, run group_backtest.py first; skipped')
                 continue
             navs = pd.read_parquet(nav_file)
 

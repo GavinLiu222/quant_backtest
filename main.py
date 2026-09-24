@@ -15,10 +15,10 @@ from data_spec import DATA_DIR, STAGES, validate
 SCRIPTS = {
     'neutralize': 'factor_neutralize.py',
     'ic':         'ic_tests.py',
-    'testing':    'positions2nav_testing.py',
+    'testing':    'group_backtest.py',
     'long_short': 'long_short.py',
-    'update':     'positions2nav_update.py',
-    'stats':      'nav2stats.py',
+    'update':     'top_n_portfolio.py',
+    'stats':      'portfolio_stats.py',
 }
 
 

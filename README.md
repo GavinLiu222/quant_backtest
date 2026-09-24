@@ -14,11 +14,11 @@
  原始因子 ──(可选)──▶ │ ① factor_neutralize.py  │ 去极值 → 标准化 → 行业中位数填充 → 行业+市值中性化
                      └───────────┬─────────────┘
                                  ▼
-          ② ic_tests.py               Rank IC / ICIR
-          ③ positions2nav_testing.py  N 分组回测，自动判定因子方向
-          ④ long_short.py             头尾两组构建多空组合并统计
-          ⑤ positions2nav_update.py   按因子方向选 Top N 构建多头组合（支持增量更新）
-          ⑥ nav2stats.py              组合相对基准指数的绩效统计
+          ② ic_tests.py         Rank IC / ICIR
+          ③ group_backtest.py   N 分组回测，自动判定因子方向
+          ④ long_short.py       头尾两组构建多空组合并统计
+          ⑤ top_n_portfolio.py  按因子方向选 Top N 构建多头组合（支持增量更新）
+          ⑥ portfolio_stats.py  组合相对基准指数的绩效统计
 ```
 
 所有脚本只读写本地 parquet / Excel 文件，**不依赖任何数据库**。按照[数据规则](#数据规则)准备数据，
@@ -77,12 +77,12 @@ uv run python main.py
 uv run python main.py testing long_short
 ```
 
-步骤名为 `neutralize ic testing long_short update stats`。也可以直接运行脚本（如 `uv run python ic_tests.py`），但这样不会先做数据检查。
+步骤名为 `neutralize ic testing long_short update stats`，依次对应 ①–⑥。也可以直接运行脚本（如 `uv run python ic_tests.py`），但这样不会先做数据检查。
 
 单因子 5 分组测试不在 `main.py` 流程中，需要单独运行：
 
 ```sh
-uv run python positions2nav.py alpha_signal
+uv run python single_factor_group_backtest.py alpha_signal
 ```
 
 ## 目录结构
@@ -97,14 +97,14 @@ uv run python positions2nav.py alpha_signal
 | [`make_demo_data.py`](make_demo_data.py) | 生成符合规则的模拟数据 |
 | [`factor_neutralize.py`](factor_neutralize.py) | ① 因子中性化 |
 | [`ic_tests.py`](ic_tests.py) | ② Rank IC / ICIR |
-| [`positions2nav_testing.py`](positions2nav_testing.py) | ③ 分组回测 + 因子方向判定 |
+| [`group_backtest.py`](group_backtest.py) | ③ 分组回测 + 因子方向判定 |
 | [`long_short.py`](long_short.py) | ④ 多空组合统计 |
-| [`positions2nav_update.py`](positions2nav_update.py) | ⑤ Top N 因子多头组合 |
-| [`nav2stats.py`](nav2stats.py) | ⑥ 组合绩效统计（相对基准） |
-| [`positions2nav.py`](positions2nav.py) | 回测引擎原型 + 单因子 5 分组测试 |
+| [`top_n_portfolio.py`](top_n_portfolio.py) | ⑤ Top N 因子多头组合 |
+| [`portfolio_stats.py`](portfolio_stats.py) | ⑥ 组合绩效统计（相对基准） |
+| [`single_factor_group_backtest.py`](single_factor_group_backtest.py) | 回测引擎原型 + 单因子 5 分组测试 |
 | [`common_functions.py`](common_functions.py) | 数据库连接等公共函数（离线运行用不到） |
 
-③⑤⑥ 和 `positions2nav.py` 中各有一份 `Positions2Nav` 类，即"持仓 → 净值"的回测引擎，逻辑见[回测引擎的计算口径](#回测引擎的计算口径)。
+③⑤⑥ 和 `single_factor_group_backtest.py` 中各有一份 `Positions2Nav` 类，即"持仓 → 净值"的回测引擎，逻辑见[回测引擎的计算口径](#回测引擎的计算口径)。
 
 ### 数据目录（`DATA_DIR`）
 
@@ -294,7 +294,7 @@ SQL 针对原公司的 Wind 库表结构编写，默认全部关闭，离线运�
 | `ic_tests.py` | 未来收益窗口：`t+1` 到 `t+21` 收盘（`ret_20D`）；`Rank_ICIR = mean(IC) / (std(IC)·√252)` |
 | `factor_neutralize.py` | MAD 去极值阈值 3×1.4826×MAD，截面唯一值少于 100 时跳过去极值 |
 | 各 `statistics_core_1` | 近 6 月 / 3 月 / 1 月 / 1 周 / 3 日 / 2 日 / 1 日收益分别以倒数第 121 / 64 / 22 / 6 / 4 / 3 / 2 个净值为起点（近 1 年为倒数第 `DAYS_PER_YEAR` 个） |
-| `positions2nav.py` | 单因子测试固定为 5 组 |
+| `single_factor_group_backtest.py` | 单因子测试固定为 5 组 |
 
 ## 各步骤的输入与输出
 
@@ -314,7 +314,7 @@ SQL 针对原公司的 Wind 库表结构编写，默认全部关闭，离线运�
   - `累计Rank_IC`：日度 IC 的累加
   - `Rank_ICIR`：`mean / (std·√252)`
 
-### ③ `positions2nav_testing.py`：分组回测
+### ③ `group_backtest.py`：分组回测
 
 - **输入**：`factors_dict{neu}.xlsx`、`factors{neu}/{f}.pq`、`stock_market.pq`、`stock_status.pq`、`rebalance_dates.pq`、`trading_days.pq`、`index_prices.pq`
 - **样本**：信号日属于该股票池、`trade_status == 1`、`is_ST == 0`、非一字板、（可选）非次新股、因子值非空
@@ -340,7 +340,7 @@ SQL 针对原公司的 Wind 库表结构编写，默认全部关闭，离线运�
   - `factor_statistic`：每个因子一行，指标见[统计指标说明](#统计指标说明)（仅绝对收益部分）
   - `navs`：多空净值；`navs_r3m`：最近 90 天归一化净值
 
-### ⑤ `positions2nav_update.py`：Top N 因子组合
+### ⑤ `top_n_portfolio.py`：Top N 因子组合
 
 - **输入**：`portfolio_info{neu}.xlsx`、`factors{neu}/{f}.pq`、`stock_market.pq`、`stock_status.pq`、`rebalance_dates.pq`、`trading_days.pq`、`index_prices.pq`
 - **选股**：样本同 ③；按 `factor_direction` 排序取前 `top_n` 只，等权（或流通市值加权封顶）
@@ -351,7 +351,7 @@ SQL 针对原公司的 Wind 库表结构编写，默认全部关闭，离线运�
 
   （`NEUTRAL=False` 时目录名为 `navs/navs/`、`g_positions/g_positions/`，与原框架一致）
 
-### ⑥ `nav2stats.py`：组合绩效
+### ⑥ `portfolio_stats.py`：组合绩效
 
 - **输入**：⑤ 的 `navs/navs{neu}/navs_{u}.pq`、`portfolio_info{neu}.xlsx`、`index_prices.pq`、`trading_days.pq`、`stock_market.pq`
 - **输出**：`portfolios/factor_statistic{neu}/factor_statistic_{u}.xlsx`
@@ -404,12 +404,13 @@ Top N 选股时会给因子值加上 1e-12 量级的随机扰动以打破并列�
 |---|---|
 | 数据路径来自 `USER_DATA_DIR/projects/<目录名>`（用 Windows 的 `\` 拆分路径，macOS/Linux 上直接报错）或写死的 `/Volumes/GAVIN/...` | 统一为 `settings.DATA_DIR`（可用环境变量 `BACKTEST_DATA_DIR` 覆盖） |
 | 各脚本 `__main__` 中分散写死日期、股票池、基准、持股数、中性化开关 | 集中到 `settings.py` |
-| 文件名 `CommonFunctions.py`、`IC_tests.py`、`position2nav_testing.py` 大小写、单复数不统一 | 改为 `common_functions.py`、`ic_tests.py`、`positions2nav_testing.py`：全部小写，统一用 `positions` |
+| 文件名 `CommonFunctions.py`、`IC_tests.py` 大小写不统一 | 改为 `common_functions.py`、`ic_tests.py`：全部小写 |
+| 脚本名 `position2nav_testing.py`、`positions2nav_update.py`、`nav2stats.py`、`positions2nav.py` 看不出具体功能，单复数也不统一 | 按功能依次重命名为 `group_backtest.py`（③）、`top_n_portfolio.py`（⑤）、`portfolio_stats.py`（⑥）、`single_factor_group_backtest.py`（单因子 5 分组测试） |
 | `common/` 或 `market_data/` 下的 `tradying_days.pq` | `market_data/trading_days.pq` |
 | `config/` 或 `market_data/` 下的 `datelist.pq` | `config/rebalance_dates.pq` |
 | `stock_prices.pq` + `stock_market.pq` + Wind 字段的 `ashare_deri.pq` | 合并为 `stock_market.pq`，流通市值为 `float_mv` 列 |
 | 因子文件列格式不统一（③ 为 5 列，其余按位置改名） | 统一按列名读取 `date, stock_id, factor_value` |
-| `positions2nav.py` 读取逐年宽表 `factors_<年>0101.pq` | 读取一个标准因子文件：`python positions2nav.py <因子名>` |
+| `positions2nav.py` 读取逐年宽表 `factors_<年>0101.pq` | 读取一个标准因子文件：`python single_factor_group_backtest.py <因子名>` |
 | ③ 需要 `portfolio_info_onetime.xlsx`；各引擎还读取未使用的 `factor_info` sheet 和 `index_info.xlsx` | 分组组合由 `N_GROUPS` 自动生成；`index_info.xlsx` 只在数据库模式下读取 |
 | 科创板股票池由代码 `688` 开头自动生成 | 在 `stock_status.pq` 中与其他股票池一样提供 `kc` 列 |
 | 行业列固定为 31 个 `zx_` 前缀的中信行业 | 所有以 `INDUSTRY_PREFIX` 开头的列 |
@@ -420,7 +421,7 @@ Top N 选股时会给因子值加上 1e-12 量级的随机扰动以打破并列�
 | 未声明 `pyarrow` / `openpyxl`，`pandas>=3` | 补充依赖；pandas 限定 `<3`（原代码的 `groupby().apply()` 依赖分组列保留在结果中，pandas 3 已移除该行为，结果会丢失 `date` 列） |
 
 **一致性验证**：在模拟数据上，用原版脚本（只修改路径、日期和离线开关）与本框架分别运行全部步骤，
-中性化因子、IC、分组持仓与净值、因子方向、多空统计、Top N 持仓与净值、绩效统计以及 `positions2nav.py` 的
+中性化因子、IC、分组持仓与净值、因子方向、多空统计、Top N 持仓与净值、绩效统计以及单因子 5 分组测试的
 共 103 个输出文件 / sheet 在 1e-12 精度内完全一致。
 
 ## 支持
